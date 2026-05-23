@@ -1,17 +1,17 @@
 import { PrismaClient } from '@prisma/client';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
-import Database from 'better-sqlite3';
+import { PrismaPg } from '@prisma/adapter-pg';
+import pg from 'pg';
 import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+dotenv.config();
 
 async function seedAdmin() {
-  const dbPath = path.join(__dirname, 'dev.db');
-  
-  const adapter = new PrismaBetterSqlite3({ url: dbPath });
+  const connectionString = process.env.DATABASE_URL;
+  const pool = new pg.Pool({ connectionString });
+  const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 
   console.log('Seeding master admin account...');
