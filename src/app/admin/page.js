@@ -14,6 +14,8 @@ export default function AdminDashboard() {
   const [editBalance, setEditBalance] = useState({});
   const [balMsg, setBalMsg] = useState(null);
   const [faultLoading, setFaultLoading] = useState('');
+  const [resettingUser, setResettingUser] = useState(null);
+  const [tempPasswordModal, setTempPasswordModal] = useState(null);
 
   const getToken = () => typeof window !== 'undefined' ? localStorage.getItem('maas_token') : null;
   const authH = () => ({ Authorization: `Bearer ${getToken()}` });
@@ -62,6 +64,27 @@ export default function AdminDashboard() {
     return <span className={`badge ${map[s] || 'badge-yellow'}`}>{s?.replace('_', ' ')}</span>;
   };
 
+  const handlePasswordReset = async (userId) => {
+    setResettingUser(userId);
+    try {
+      const res = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { ...authH(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTempPasswordModal({ phone: data.userPhone, tempPassword: data.tempPassword });
+        fetchData();
+      } else {
+        alert(data.error || 'Failed to reset password');
+      }
+    } catch {
+      alert('Network error while resetting password.');
+    }
+    setResettingUser(null);
+  };
+
   const navSections = [
     {
       label: 'Administration',
@@ -69,6 +92,7 @@ export default function AdminDashboard() {
         { id: 'overview', icon: '📊', label: 'Overview', active: tab === 'overview', onClick: () => setTab('overview') },
         { id: 'users', icon: '👥', label: 'User Management', active: tab === 'users', onClick: () => setTab('users'), badge: users.length || undefined },
         { id: 'faults', icon: '🔧', label: 'Fault Management', active: tab === 'faults', onClick: () => setTab('faults'), badge: faults.filter(f => f.status === 'PENDING').length || undefined },
+        { id: 'resets', icon: '🔐', label: 'Password Resets', active: tab === 'resets', onClick: () => setTab('resets'), badge: users.filter(u => u.resetRequested).length || undefined },
       ],
     },
     {
@@ -91,8 +115,8 @@ export default function AdminDashboard() {
     <DashboardLayout
       nav={navSections}
       user={adminUser}
-      title={{ overview: '⚙️ Admin Overview', users: '👥 User Management', faults: '🔧 Fault Management' }[tab]}
-      subtitle={{ overview: 'Buea Microgrid Control Center', users: 'Manage all registered clients and their balances.', faults: 'Track, update and resolve all reported grid faults.' }[tab]}
+      title={{ overview: '⚙️ Admin Overview', users: '👥 User Management', faults: '🔧 Fault Management', resets: '🔐 Password Resets' }[tab]}
+      subtitle={{ overview: 'Buea Microgrid Control Center', users: 'Manage all registered clients and their balances.', faults: 'Track, update and resolve all reported grid faults.', resets: 'Manage users who forgot their passwords.' }[tab]}
     >
       {/* OVERVIEW */}
       {tab === 'overview' && (
@@ -255,6 +279,72 @@ export default function AdminDashboard() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* PASSWORD RESETS */}
+      {tab === 'resets' && (
+        <div className="card">
+          <div className="section-title">
+            <h3>Password Reset Requests</h3>
+            <span className="badge badge-yellow">{users.filter(u => u.resetRequested).length} Pending</span>
+          </div>
+
+          {tempPasswordModal && (
+            <div className="alert alert-success" style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <strong>✅ Password Reset Successfully!</strong><br/>
+                Temporary password for {tempPasswordModal.phone}: 
+                <span style={{ fontSize: '1.25rem', fontWeight: 'bold', letterSpacing: '2px', background: '#fff', padding: '4px 12px', borderRadius: '4px', margin: '0 10px', color: '#000' }}>
+                  {tempPasswordModal.tempPassword}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <a href={`https://wa.me/${tempPasswordModal.phone.replace('+', '')}?text=${encodeURIComponent(`Hello! Your new temporary password for Buea MaaS is: ${tempPasswordModal.tempPassword}. Please log in and remember to change it later.`)}`} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
+                  Send via WhatsApp
+                </a>
+                <button onClick={() => setTempPasswordModal(null)} className="btn btn-ghost btn-sm">Dismiss</button>
+              </div>
+            </div>
+          )}
+
+          {users.filter(u => u.resetRequested).length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>No pending password reset requests.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Client Name</th>
+                  <th>Phone Number</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.filter(u => u.resetRequested).map(u => (
+                  <tr key={u.id}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                        <div className="avatar" style={{ width: '32px', height: '32px', fontSize: '.8rem' }}>
+                          {u.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <p style={{ fontWeight: 600, fontSize: '.9rem' }}>{u.name}</p>
+                      </div>
+                    </td>
+                    <td style={{ color: 'var(--text-muted)' }}>{u.phoneNumber}</td>
+                    <td>
+                      <button 
+                        className="btn btn-primary btn-sm" 
+                        onClick={() => handlePasswordReset(u.id)}
+                        disabled={resettingUser === u.id}
+                      >
+                        {resettingUser === u.id ? 'Resetting...' : '🔑 Generate Temp Password'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </DashboardLayout>

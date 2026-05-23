@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 export default function LoginPage() {
   const router = useRouter();
   const [form, setForm] = useState({ phoneNumber: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const handle = e => setForm({ ...form, [e.target.name]: e.target.value });
@@ -35,7 +36,18 @@ export default function LoginPage() {
           {error && <div className="alert alert-error" style={{ marginBottom: '1.25rem' }}>{error}</div>}
           <form onSubmit={submit}>
             <div className="form-group"><label>Phone Number</label><input className="input" type="text" name="phoneNumber" placeholder="+237 6XX XXX XXX" value={form.phoneNumber} onChange={handle} required /></div>
-            <div className="form-group"><label>Password</label><input className="input" type="password" name="password" placeholder="••••••••" value={form.password} onChange={handle} required /></div>
+            <div className="form-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '.35rem' }}>
+                <label style={{ marginBottom: 0 }}>Password</label>
+                <Link href="/forgot-password" style={{ fontSize: '.8rem', color: 'var(--primary)', fontWeight: 500 }}>Forgot Password?</Link>
+              </div>
+              <div style={{ position: 'relative' }}>
+                <input className="input" type={showPassword ? "text" : "password"} name="password" placeholder="••••••••" value={form.password} onChange={handle} required style={{ paddingRight: '40px' }} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: 'var(--text-muted)' }}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+            </div>
             <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '.875rem', marginTop: '.25rem' }} disabled={loading}>
               {loading ? 'Signing in…' : 'Sign In →'}
             </button>

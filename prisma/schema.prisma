@@ -17,6 +17,7 @@ model User {
   password      String
   role          String       @default("USER") // USER or ADMIN
   balanceFCFA   Float        @default(0)
+  resetRequested Boolean     @default(false)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 

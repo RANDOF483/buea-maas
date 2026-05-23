@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 export default function RegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({ name: '', email: '', phoneNumber: '', password: '', confirm: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const handle = e => setForm({ ...form, [e.target.name]: e.target.value });
@@ -40,8 +42,24 @@ export default function RegisterPage() {
             <div className="form-group"><label>Full Name</label><input className="input" type="text" name="name" placeholder="John Doe" value={form.name} onChange={handle} required /></div>
             <div className="form-group"><label>Phone Number <span style={{ color: 'var(--primary)' }}>*</span></label><input className="input" type="text" name="phoneNumber" placeholder="+237 6XX XXX XXX" value={form.phoneNumber} onChange={handle} required /></div>
             <div className="form-group"><label>Email <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}>(optional)</span></label><input className="input" type="email" name="email" placeholder="you@example.com" value={form.email} onChange={handle} /></div>
-            <div className="form-group"><label>Password</label><input className="input" type="password" name="password" placeholder="Min. 6 characters" value={form.password} onChange={handle} required /></div>
-            <div className="form-group"><label>Confirm Password</label><input className="input" type="password" name="confirm" placeholder="Repeat password" value={form.confirm} onChange={handle} required /></div>
+            <div className="form-group">
+              <label>Password</label>
+              <div style={{ position: 'relative' }}>
+                <input className="input" type={showPassword ? "text" : "password"} name="password" placeholder="Min. 6 characters" value={form.password} onChange={handle} required style={{ paddingRight: '40px' }} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: 'var(--text-muted)' }}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Confirm Password</label>
+              <div style={{ position: 'relative' }}>
+                <input className="input" type={showConfirm ? "text" : "password"} name="confirm" placeholder="Repeat password" value={form.confirm} onChange={handle} required style={{ paddingRight: '40px' }} />
+                <button type="button" onClick={() => setShowConfirm(!showConfirm)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: 'var(--text-muted)' }}>
+                  {showConfirm ? '🙈' : '👁️'}
+                </button>
+              </div>
+            </div>
             <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '.875rem', marginTop: '.25rem' }} disabled={loading}>
               {loading ? 'Creating account…' : 'Create Account →'}
             </button>
