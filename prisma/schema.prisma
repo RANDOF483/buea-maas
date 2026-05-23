@@ -7,7 +7,6 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -61,6 +60,7 @@ model Payment {
 model Fault {
   id            String   @id @default(cuid())
   description   String
+  imageUrl      String?
   status        String   @default("PENDING") // PENDING, RESOLVED
   userId        String
   user          User     @relation(fields: [userId], references: [id])
