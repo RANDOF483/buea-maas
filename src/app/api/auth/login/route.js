@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { supabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
@@ -13,8 +13,10 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Phone number and password are required.' }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { phoneNumber } });
-    if (!user) {
+    const { data: user, error } = await supabaseAdmin
+      .from('User').select('*').eq('phoneNumber', phoneNumber).single();
+
+    if (error || !user) {
       return NextResponse.json({ error: 'Invalid credentials.' }, { status: 401 });
     }
 

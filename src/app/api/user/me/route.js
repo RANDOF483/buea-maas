@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { supabaseAdmin } from '@/lib/supabase';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'buea-maas-secret-key-2024';
@@ -11,23 +11,24 @@ function getUserFromReq(req) {
   try { return jwt.verify(token, JWT_SECRET); } catch { return null; }
 }
 
-// GET /api/user/me — get current user profile + balance
 export async function GET(req) {
   const decoded = getUserFromReq(req);
   if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const user = await prisma.user.findUnique({
-    where: { id: decoded.id },
-    select: { id: true, name: true, email: true, phoneNumber: true, role: true, balanceFCFA: true, createdAt: true },
-  });
+  const { data: user, error } = await supabaseAdmin
+    .from('User')
+    .select('id, name, email, phoneNumber, neighborhood, role, balanceFCFA, createdAt')
+    .eq('id', decoded.id)
+    .single();
 
-  if (!user) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+  if (error || !user) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
 
-  // Calculate total consumption from appliances
-  const appliances = await prisma.appliance.findMany({ where: { userId: decoded.id } });
-  const dailyKWh = appliances.reduce((sum, a) => sum + (a.wattage * a.quantity * a.hoursPerDay) / 1000, 0);
+  const { data: appliances } = await supabaseAdmin
+    .from('Appliance').select('wattage, quantity, hoursPerDay').eq('userId', decoded.id);
+
+  const dailyKWh = (appliances || []).reduce((sum, a) => sum + (a.wattage * a.quantity * a.hoursPerDay) / 1000, 0);
   const monthlyKWh = dailyKWh * 30;
-  const monthlyCostFCFA = monthlyKWh * 100; // 100 FCFA/kWh
+  const monthlyCostFCFA = monthlyKWh * 100;
 
   return NextResponse.json({ ...user, dailyKWh, monthlyKWh, monthlyCostFCFA });
 }

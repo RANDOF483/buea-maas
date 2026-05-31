@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
+import PaymentTab from '@/components/PaymentTab';
 
 const TARIFF = 100;
 
@@ -15,7 +16,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [appForm, setAppForm] = useState({ name: '', wattage: '', quantity: 1, hoursPerDay: '' });
   const [appMsg, setAppMsg] = useState(null);
-  const [payForm, setPayForm] = useState({ amountFCFA: '', method: 'MTN' });
   const [payMsg, setPayMsg] = useState(null);
   const [lastReceipt, setLastReceipt] = useState(null);
   const [faultDesc, setFaultDesc] = useState('');
@@ -62,12 +62,11 @@ export default function Dashboard() {
     fetchAll();
   };
 
-  const makePayment = async (e) => {
-    e.preventDefault(); setPayMsg(null); setLastReceipt(null);
-    const res = await fetch('/api/payments', { method: 'POST', headers: { ...authH(), 'Content-Type': 'application/json' }, body: JSON.stringify(payForm) });
+  const makePayment = async (amountFCFA, method, txRef) => {
+    const res = await fetch('/api/payments', { method: 'POST', headers: { ...authH(), 'Content-Type': 'application/json' }, body: JSON.stringify({ amountFCFA, method, transactionRef: txRef }) });
     const d = await res.json();
-    setPayMsg({ ok: res.ok, text: res.ok ? '✅ Payment successful!' : d.error });
-    if (res.ok) { setLastReceipt(d.payment); setPayForm({ amountFCFA: '', method: 'MTN' }); fetchAll(); }
+    if (res.ok) { setLastReceipt(d.payment); fetchAll(); }
+    return { ok: res.ok, data: d };
   };
 
   const handleImageUpload = (e) => {
@@ -133,7 +132,7 @@ export default function Dashboard() {
     <DashboardLayout
       nav={navSections}
       user={user}
-      title={tab === 'overview' ? `Welcome back, ${user?.name?.split(' ')[0]} 👋` : { appliances: 'Appliance Manager', payments: 'Payments & Billing', faults: 'Fault Reporting' }[tab]}
+      title={tab === 'overview' ? `Welcome back, ${user?.name?.split(' ')[0]} 👋 ${user?.neighborhood ? `(${user.neighborhood})` : ''}` : { appliances: 'Appliance Manager', payments: 'Payments & Billing', faults: 'Fault Reporting' }[tab]}
       subtitle={{ overview: 'Here\'s your energy summary for today.', appliances: 'Register and manage your home appliances.', payments: 'Top up your balance and view billing history.', faults: 'Report issues to our Buea support team.' }[tab]}
     >
       {/* OVERVIEW */}
@@ -269,61 +268,17 @@ export default function Dashboard() {
 
       {/* PAYMENTS */}
       {tab === 'payments' && (
-        <div className="grid-2" style={{ alignItems: 'start' }}>
-          <div className="card">
-            <h3 style={{ marginBottom: '.5rem' }}>💳 Top Up Balance</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '.88rem', marginBottom: '1.5rem' }}>
-              Current balance: <strong style={{ color: 'var(--primary)' }}>{balance.toLocaleString()} FCFA</strong>
-            </p>
-            <Msg msg={payMsg} />
-            <form onSubmit={makePayment}>
-              <div className="form-group"><label>Amount (FCFA)</label><input className="input" type="number" min="500" step="500" placeholder="e.g. 5,000" value={payForm.amountFCFA} onChange={e => setPayForm({ ...payForm, amountFCFA: e.target.value })} required /></div>
-              <div className="form-group">
-                <label>Payment Method</label>
-                <select className="input" value={payForm.method} onChange={e => setPayForm({ ...payForm, method: e.target.value })}>
-                  <option value="MTN">📱 MTN Mobile Money</option>
-                  <option value="ORANGE">🟠 Orange Money</option>
-                </select>
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>Pay Now</button>
-            </form>
-            {lastReceipt && (
-              <div style={{ marginTop: '1.5rem', padding: '1.25rem', background: 'rgba(16,185,129,.05)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 'var(--radius-sm)' }}>
-                <h4 style={{ color: 'var(--primary)', marginBottom: '1rem' }}>✅ Transaction Receipt</h4>
-                {[['Transaction ID', lastReceipt.transactionId], ['Method', lastReceipt.method], ['Date', new Date(lastReceipt.createdAt).toLocaleString()]].map(([k, v]) => (
-                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '.5rem 0', borderBottom: '1px solid var(--border)', fontSize: '.85rem' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>{k}</span><span>{v}</span>
-                  </div>
-                ))}
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '.75rem 0 0', fontWeight: 700 }}>
-                  <span>Amount Paid</span><span style={{ color: 'var(--primary)', fontSize: '1.1rem' }}>{lastReceipt.amountFCFA.toLocaleString()} FCFA</span>
-                </div>
-                <button onClick={() => window.print()} className="btn btn-ghost" style={{ width: '100%', marginTop: '1rem' }}>🖨 Print Receipt</button>
-              </div>
-            )}
-          </div>
-          <div className="card">
-            <div className="section-title">
-              <h3>🧾 Payment History</h3>
-              <span className="badge badge-blue">{payments.length} transactions</span>
-            </div>
-            {payments.length === 0 ? <p style={{ color: 'var(--text-muted)' }}>No payments yet.</p> : (
-              <table className="table">
-                <thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Status</th></tr></thead>
-                <tbody>
-                  {payments.map(p => (
-                    <tr key={p.id}>
-                      <td style={{ fontSize: '.82rem', color: 'var(--text-muted)' }}>{new Date(p.createdAt).toLocaleDateString()}</td>
-                      <td><span className={`badge ${p.method === 'MTN' ? 'badge-yellow' : 'badge-purple'}`}>{p.method}</span></td>
-                      <td style={{ fontWeight: 600 }}>{p.amountFCFA.toLocaleString()} FCFA</td>
-                      <td><span className="badge badge-green">✓ Paid</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
+        <PaymentTab
+          balance={balance}
+          monthlyCost={monthlyCost}
+          payments={payments}
+          authH={authH}
+          payMsg={payMsg}
+          setPayMsg={setPayMsg}
+          lastReceipt={lastReceipt}
+          setLastReceipt={setLastReceipt}
+          fetchAll={fetchAll}
+        />
       )}
 
       {/* FAULTS */}

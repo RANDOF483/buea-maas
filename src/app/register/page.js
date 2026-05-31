@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: '', email: '', phoneNumber: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ name: '', email: '', phoneNumber: '', neighborhood: '', password: '', confirm: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
@@ -18,12 +18,22 @@ export default function RegisterPage() {
     if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, email: form.email || undefined, phoneNumber: form.phoneNumber, password: form.password }) });
+      const res = await fetch('/api/auth/register', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ 
+          name: form.name, 
+          email: form.email || undefined, 
+          phoneNumber: form.phoneNumber, 
+          neighborhood: form.neighborhood,
+          password: form.password
+        }) 
+      });
       const data = await res.json();
       if (!res.ok) { setError(data.error); setLoading(false); return; }
       localStorage.setItem('maas_token', data.token);
       localStorage.setItem('maas_user', JSON.stringify(data.user));
-      router.push('/dashboard');
+      router.push('/register-appliances');
     } catch { setError('Network error. Please try again.'); setLoading(false); }
   };
 
@@ -42,6 +52,23 @@ export default function RegisterPage() {
             <div className="form-group"><label>Full Name</label><input className="input" type="text" name="name" placeholder="John Doe" value={form.name} onChange={handle} required /></div>
             <div className="form-group"><label>Phone Number <span style={{ color: 'var(--primary)' }}>*</span></label><input className="input" type="text" name="phoneNumber" placeholder="+237 6XX XXX XXX" value={form.phoneNumber} onChange={handle} required /></div>
             <div className="form-group"><label>Email <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}>(optional)</span></label><input className="input" type="email" name="email" placeholder="you@example.com" value={form.email} onChange={handle} /></div>
+            
+            <div className="form-group"><label>Neighborhood <span style={{ color: 'var(--primary)' }}>*</span></label>
+              <select className="input" name="neighborhood" value={form.neighborhood} onChange={handle} required>
+                <option value="">Select Neighborhood</option>
+                <option value="Molyko">Molyko</option>
+                <option value="Clerks Quarters">Clerks Quarters</option>
+                <option value="Bokwango">Bokwango</option>
+                <option value="Bomaka">Bomaka</option>
+                <option value="Bonduma">Bonduma</option>
+                <option value="Muea">Muea</option>
+                <option value="Buea Town">Buea Town</option>
+                <option value="Great Soppo">Great Soppo</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            
             <div className="form-group">
               <label>Password</label>
               <div style={{ position: 'relative' }}>

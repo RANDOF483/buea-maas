@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { supabaseAdmin } from '@/lib/supabase';
 import jwt from 'jsonwebtoken';
 import fs from 'fs/promises';
 import path from 'path';
@@ -18,11 +18,12 @@ export async function GET(req) {
   const decoded = getUserFromReq(req);
   if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const faults = await prisma.fault.findMany({
-    where: { userId: decoded.id },
-    orderBy: { createdAt: 'desc' },
-  });
-  return NextResponse.json(faults);
+  const { data: faults, error } = await supabaseAdmin
+    .from('Fault').select('*').eq('userId', decoded.id)
+    .order('createdAt', { ascending: false });
+
+  if (error) return NextResponse.json({ error: 'Failed to fetch faults.' }, { status: 500 });
+  return NextResponse.json(faults || []);
 }
 
 export async function POST(req) {
@@ -45,13 +46,15 @@ export async function POST(req) {
         await fs.writeFile(path.join(uploadDir, fileName), buffer);
         imageUrl = `/uploads/${fileName}`;
       }
-    } catch (e) {
-      console.error('Image upload failed:', e);
-    }
+    } catch (e) { console.error('Image upload failed:', e); }
   }
 
-  const fault = await prisma.fault.create({
-    data: { description, imageUrl, userId: decoded.id },
-  });
+  const { data: fault, error } = await supabaseAdmin.from('Fault').insert({
+    id: `c${Date.now()}${Math.random().toString(36).slice(2, 9)}`,
+    description, imageUrl, userId: decoded.id,
+    status: 'PENDING', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  }).select().single();
+
+  if (error) return NextResponse.json({ error: 'Failed to submit fault.' }, { status: 500 });
   return NextResponse.json(fault, { status: 201 });
 }

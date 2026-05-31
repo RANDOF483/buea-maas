@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { supabaseAdmin } from '@/lib/supabase';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'buea-maas-secret-key-2024';
@@ -11,16 +11,17 @@ function getUserFromReq(req) {
   try { return jwt.verify(token, JWT_SECRET); } catch { return null; }
 }
 
-// GET /api/appliances — fetch user's appliances
 export async function GET(req) {
   const decoded = getUserFromReq(req);
   if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const appliances = await prisma.appliance.findMany({ where: { userId: decoded.id } });
-  return NextResponse.json(appliances);
+  const { data: appliances, error } = await supabaseAdmin
+    .from('Appliance').select('*').eq('userId', decoded.id).order('createdAt', { ascending: false });
+
+  if (error) return NextResponse.json({ error: 'Failed to fetch appliances.' }, { status: 500 });
+  return NextResponse.json(appliances || []);
 }
 
-// POST /api/appliances — add appliance
 export async function POST(req) {
   const decoded = getUserFromReq(req);
   if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -30,13 +31,16 @@ export async function POST(req) {
     return NextResponse.json({ error: 'Name, wattage, and hours/day are required.' }, { status: 400 });
   }
 
-  const appliance = await prisma.appliance.create({
-    data: { name, wattage: parseFloat(wattage), quantity: parseInt(quantity) || 1, hoursPerDay: parseFloat(hoursPerDay), userId: decoded.id },
-  });
+  const id = `c${Date.now()}${Math.random().toString(36).slice(2, 9)}`;
+  const { data: appliance, error } = await supabaseAdmin.from('Appliance').insert({
+    id, name, wattage: parseFloat(wattage), quantity: parseInt(quantity) || 1,
+    hoursPerDay: parseFloat(hoursPerDay), userId: decoded.id, createdAt: new Date().toISOString(),
+  }).select().single();
+
+  if (error) return NextResponse.json({ error: 'Failed to add appliance.' }, { status: 500 });
   return NextResponse.json(appliance, { status: 201 });
 }
 
-// DELETE /api/appliances?id=xxx
 export async function DELETE(req) {
   const decoded = getUserFromReq(req);
   if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -45,6 +49,6 @@ export async function DELETE(req) {
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Appliance ID required.' }, { status: 400 });
 
-  await prisma.appliance.deleteMany({ where: { id, userId: decoded.id } });
+  await supabaseAdmin.from('Appliance').delete().eq('id', id).eq('userId', decoded.id);
   return NextResponse.json({ message: 'Appliance deleted.' });
 }

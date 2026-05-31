@@ -18,6 +18,7 @@ model User {
   role          String       @default("USER") // USER or ADMIN
   balanceFCFA   Float        @default(0)
   resetRequested Boolean     @default(false)
+  neighborhood  String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 

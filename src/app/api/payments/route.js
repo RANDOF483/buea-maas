@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { supabaseAdmin } from '@/lib/supabase';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'buea-maas-secret-key-2024';
-const TARIFF_FCFA_PER_KWH = 100; // XAF tariff
+const TARIFF_FCFA_PER_KWH = 100;
 
 function getUserFromReq(req) {
   const auth = req.headers.get('authorization');
@@ -12,25 +12,23 @@ function getUserFromReq(req) {
   try { return jwt.verify(token, JWT_SECRET); } catch { return null; }
 }
 
-// GET /api/payments — fetch payment history
 export async function GET(req) {
   const decoded = getUserFromReq(req);
   if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const payments = await prisma.payment.findMany({
-    where: { userId: decoded.id },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-  });
-  return NextResponse.json(payments);
+  const { data: payments, error } = await supabaseAdmin
+    .from('Payment').select('*').eq('userId', decoded.id)
+    .order('createdAt', { ascending: false }).limit(20);
+
+  if (error) return NextResponse.json({ error: 'Failed to fetch payments.' }, { status: 500 });
+  return NextResponse.json(payments || []);
 }
 
-// POST /api/payments — simulate Mobile Money top-up
 export async function POST(req) {
   const decoded = getUserFromReq(req);
   if (!decoded) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { amountFCFA, method } = await req.json();
+  const { amountFCFA, method, transactionRef } = await req.json();
   if (!amountFCFA || !method) {
     return NextResponse.json({ error: 'Amount and payment method are required.' }, { status: 400 });
   }
@@ -39,16 +37,22 @@ export async function POST(req) {
   }
 
   const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+  const amount = parseFloat(amountFCFA);
 
-  const [payment] = await prisma.$transaction([
-    prisma.payment.create({
-      data: { amountFCFA: parseFloat(amountFCFA), method, transactionId, userId: decoded.id },
-    }),
-    prisma.user.update({
-      where: { id: decoded.id },
-      data: { balanceFCFA: { increment: parseFloat(amountFCFA) } },
-    }),
-  ]);
+  const { data: payment, error: paymentError } = await supabaseAdmin.from('Payment').insert({
+    id: `c${Date.now()}${Math.random().toString(36).slice(2, 9)}`,
+    amountFCFA: amount, method, transactionId, transactionRef: transactionRef || null, userId: decoded.id,
+    status: 'COMPLETED', createdAt: new Date().toISOString(),
+  }).select().single();
+
+  if (paymentError) return NextResponse.json({ error: 'Payment failed.' }, { status: 500 });
+
+  // Update user balance
+  const { data: user } = await supabaseAdmin.from('User').select('balanceFCFA').eq('id', decoded.id).single();
+  await supabaseAdmin.from('User').update({
+    balanceFCFA: (user?.balanceFCFA || 0) + amount,
+    updatedAt: new Date().toISOString()
+  }).eq('id', decoded.id);
 
   return NextResponse.json({ message: 'Payment successful!', payment, tariff: TARIFF_FCFA_PER_KWH }, { status: 201 });
 }

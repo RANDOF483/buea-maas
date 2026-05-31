@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { supabaseAdmin } from '@/lib/supabase';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'buea-maas-secret-key-2024';
@@ -17,32 +17,34 @@ export async function GET(req) {
     return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
   }
 
-  const [totalUsers, totalPayments, totalFaults, pendingFaults, allFaults] = await prisma.$transaction([
-    prisma.user.count({ where: { role: 'USER' } }),
-    prisma.payment.aggregate({ _sum: { amountFCFA: true } }),
-    prisma.fault.count(),
-    prisma.fault.count({ where: { status: 'PENDING' } }),
-    prisma.fault.findMany({ include: { user: { select: { name: true, phoneNumber: true } } }, orderBy: { createdAt: 'desc' }, take: 10 }),
+  const [
+    { count: totalUsers },
+    { data: payments },
+    { count: totalFaults },
+    { count: pendingFaults },
+    { data: recentFaults },
+    { data: recentUsers },
+  ] = await Promise.all([
+    supabaseAdmin.from('User').select('*', { count: 'exact', head: true }).eq('role', 'USER'),
+    supabaseAdmin.from('Payment').select('amountFCFA'),
+    supabaseAdmin.from('Fault').select('*', { count: 'exact', head: true }),
+    supabaseAdmin.from('Fault').select('*', { count: 'exact', head: true }).eq('status', 'PENDING'),
+    supabaseAdmin.from('Fault').select('*, user:userId(name, phoneNumber)').order('createdAt', { ascending: false }).limit(10),
+    supabaseAdmin.from('User').select('id, name, phoneNumber, balanceFCFA, createdAt').eq('role', 'USER').order('createdAt', { ascending: false }).limit(10),
   ]);
 
-  const users = await prisma.user.findMany({
-    where: { role: 'USER' },
-    select: { id: true, name: true, phoneNumber: true, balanceFCFA: true, createdAt: true },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-  });
+  const totalRevenueFCFA = (payments || []).reduce((sum, p) => sum + (p.amountFCFA || 0), 0);
 
   return NextResponse.json({
-    totalUsers,
-    totalRevenueFCFA: totalPayments._sum.amountFCFA || 0,
-    totalFaults,
-    pendingFaults,
-    recentFaults: allFaults,
-    recentUsers: users,
+    totalUsers: totalUsers || 0,
+    totalRevenueFCFA,
+    totalFaults: totalFaults || 0,
+    pendingFaults: pendingFaults || 0,
+    recentFaults: recentFaults || [],
+    recentUsers: recentUsers || [],
   });
 }
 
-// PATCH /api/admin — resolve a fault
 export async function PATCH(req) {
   const decoded = getUserFromReq(req);
   if (!decoded || decoded.role !== 'ADMIN') {
@@ -50,9 +52,10 @@ export async function PATCH(req) {
   }
 
   const { faultId } = await req.json();
-  const fault = await prisma.fault.update({
-    where: { id: faultId },
-    data: { status: 'RESOLVED' },
-  });
+  const { data: fault, error } = await supabaseAdmin
+    .from('Fault').update({ status: 'RESOLVED', updatedAt: new Date().toISOString() })
+    .eq('id', faultId).select().single();
+
+  if (error) return NextResponse.json({ error: 'Failed to resolve fault.' }, { status: 500 });
   return NextResponse.json(fault);
 }
