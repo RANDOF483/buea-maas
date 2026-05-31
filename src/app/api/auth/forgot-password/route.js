@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { supabaseAdmin } from '@/lib/supabase';
 
 // POST /api/auth/forgot-password
 export async function POST(req) {
@@ -10,19 +10,16 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Phone number is required.' }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { phoneNumber }
-    });
+    const { data: user } = await supabaseAdmin
+      .from('User').select('id').eq('phoneNumber', phoneNumber).single();
 
     if (!user) {
       // Return success anyway to prevent phone number enumeration
       return NextResponse.json({ message: 'Your reset request has been flagged. Please contact the administrator.' });
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { resetRequested: true }
-    });
+    await supabaseAdmin
+      .from('User').update({ resetRequested: true }).eq('id', user.id);
 
     return NextResponse.json({
       message: 'Your reset request has been flagged. Please contact the administrator on WhatsApp to receive your temporary password.'
